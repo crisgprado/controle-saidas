@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Controle de Saídas - Firebase</title>
+<title>Controle de Saídas - Firebase Avançado</title>
 <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -42,6 +42,15 @@
     <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded hover:bg-blue-700">Registrar</button>
   </form>
 
+  <!-- FILTRO -->
+  <div class="mt-4 flex gap-2 items-center">
+    <label>Filtrar por data:</label>
+    <input type="date" id="filterStart" class="p-2 border rounded">
+    <input type="date" id="filterEnd" class="p-2 border rounded">
+    <button id="filterBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Filtrar</button>
+    <button id="clearFilterBtn" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-700">Limpar</button>
+  </div>
+
   <!-- HISTÓRICO -->
   <h2 class="text-xl font-bold mt-4 mb-2">Histórico</h2>
   <div class="overflow-x-auto bg-white p-2 rounded-xl shadow">
@@ -49,6 +58,7 @@
       <thead class="bg-blue-600 text-white">
         <tr>
           <th>Data</th><th>Condutor</th><th>Saída</th><th>Chegada</th><th>Km Inicial</th><th>Km Final</th><th>Km Percorrida</th><th>Combustível</th>
+          <th id="adminColumn" class="hidden">Excluir</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -91,7 +101,7 @@ const db = firebase.firestore();
 const loginPage = document.getElementById('loginPage');
 const mainPage = document.getElementById('mainPage');
 const historyTableBody = document.querySelector("#historyTable tbody");
-
+const adminColumn = document.getElementById('adminColumn');
 let kmChart, consumoChart;
 
 // Usuários fixos
@@ -106,6 +116,7 @@ document.getElementById('loginBtn').addEventListener('click', ()=>{
     isAdmin = username==='admin';
     loginPage.classList.add('hidden');
     mainPage.classList.remove('hidden');
+    if(isAdmin) adminColumn.classList.remove('hidden');
     loadRecords();
   } else alert("Usuário ou senha incorretos!");
 });
@@ -128,19 +139,46 @@ document.getElementById('carForm').addEventListener('submit', async e=>{
 });
 
 // 🔹 CARREGAR REGISTROS
-async function loadRecords(){
-  const snapshot = await db.collection("registros").orderBy("date","desc").get();
+async function loadRecords(startDate, endDate){
+  let query = db.collection("registros").orderBy("date","desc");
+  if(startDate) query = query.where("date", ">=", startDate);
+  if(endDate) query = query.where("date", "<=", endDate);
+
+  const snapshot = await query.get();
   historyTableBody.innerHTML = "";
   const records = [];
   snapshot.forEach(doc=>{
     const r = doc.data();
+    r.id = doc.id;
     records.push(r);
+
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${r.date}</td><td>${r.driver}</td><td>${r.timeStart}</td><td>${r.timeEnd}</td><td>${r.kmStart}</td><td>${r.kmEnd}</td><td>${r.kmTravelled}</td><td>${r.fuel}</td>`;
+    if(isAdmin){
+      const td = document.createElement('td');
+      const btn = document.createElement('button');
+      btn.textContent = "🗑️";
+      btn.className = "bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700";
+      btn.onclick = async ()=>{ await db.collection("registros").doc(r.id).delete(); loadRecords(); };
+      td.appendChild(btn);
+      tr.appendChild(td);
+    }
     historyTableBody.appendChild(tr);
   });
   updateCharts(records);
 }
+
+// 🔹 FILTRO
+document.getElementById('filterBtn').addEventListener('click', ()=>{
+  const start = document.getElementById('filterStart').value;
+  const end = document.getElementById('filterEnd').value;
+  loadRecords(start,end);
+});
+document.getElementById('clearFilterBtn').addEventListener('click', ()=>{
+  document.getElementById('filterStart').value = "";
+  document.getElementById('filterEnd').value = "";
+  loadRecords();
+});
 
 // 🔹 EXPORTAÇÃO
 document.getElementById('exportCSV').addEventListener('click', async ()=>{
