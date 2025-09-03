@@ -5,12 +5,14 @@
 <title>Controle de Saídas - Firebase</title>
 <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
 
 <header class="bg-blue-600 text-white p-4 text-center font-bold text-xl">🚗 Controle de Saídas</header>
 
+<!-- LOGIN -->
 <div id="loginPage" class="flex-1 flex items-center justify-center">
   <div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-md">
     <h2 class="text-2xl font-bold mb-4 text-center">Login</h2>
@@ -20,8 +22,10 @@
   </div>
 </div>
 
+<!-- APP -->
 <div id="mainPage" class="hidden flex-1 flex flex-col p-4">
-  <h2 class="text-xl font-bold mb-2">Registrar Saída</h2>
+
+  <!-- FORMULÁRIO -->
   <form id="carForm" class="bg-white p-4 rounded-xl shadow space-y-2">
     <input type="date" id="date" class="w-full p-2 border rounded" required>
     <select id="driver" class="w-full p-2 border rounded" required>
@@ -38,6 +42,7 @@
     <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded hover:bg-blue-700">Registrar</button>
   </form>
 
+  <!-- HISTÓRICO -->
   <h2 class="text-xl font-bold mt-4 mb-2">Histórico</h2>
   <div class="overflow-x-auto bg-white p-2 rounded-xl shadow">
     <table class="w-full text-center border border-gray-300" id="historyTable">
@@ -49,10 +54,28 @@
       <tbody></tbody>
     </table>
   </div>
+
+  <!-- EXPORTAÇÃO -->
+  <div class="mt-4 flex gap-2">
+    <button id="exportCSV" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Exportar CSV</button>
+    <button id="exportTXT" class="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-900">Exportar TXT</button>
+  </div>
+
+  <!-- GRÁFICOS -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+    <div class="bg-white p-4 rounded-xl shadow">
+      <h3 class="text-xl font-semibold mb-2">Km Percorridos por Condutor</h3>
+      <canvas id="kmChart"></canvas>
+    </div>
+    <div class="bg-white p-4 rounded-xl shadow">
+      <h3 class="text-xl font-semibold mb-2">Consumo Médio (Km/L)</h3>
+      <canvas id="consumoChart"></canvas>
+    </div>
+  </div>
 </div>
 
 <script>
-// Firebase config
+// 🔹 CONFIG FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyDV7CNAxkfowHWltr-E3BHimLSMb_LaAbI",
   authDomain: "controle-saidas-3ccd7.firebaseapp.com",
@@ -64,23 +87,30 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
+// 🔹 VARIÁVEIS
 const loginPage = document.getElementById('loginPage');
 const mainPage = document.getElementById('mainPage');
 const historyTableBody = document.querySelector("#historyTable tbody");
 
-// Usuários fixos para teste
-const users = { 'Cristiano':'1234','Gabriel':'1234','Roberto':'1234','admin':'admin123' };
+let kmChart, consumoChart;
 
+// Usuários fixos
+const users = { 'Cristiano':'1234','Gabriel':'1234','Roberto':'1234','admin':'admin123' };
+let isAdmin = false;
+
+// 🔹 LOGIN
 document.getElementById('loginBtn').addEventListener('click', ()=>{
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
   if(users[username] && users[username]===password){
+    isAdmin = username==='admin';
     loginPage.classList.add('hidden');
     mainPage.classList.remove('hidden');
     loadRecords();
   } else alert("Usuário ou senha incorretos!");
 });
 
+// 🔹 REGISTRO DE SAÍDA
 document.getElementById('carForm').addEventListener('submit', async e=>{
   e.preventDefault();
   const date = document.getElementById('date').value;
@@ -97,18 +127,49 @@ document.getElementById('carForm').addEventListener('submit', async e=>{
   loadRecords();
 });
 
+// 🔹 CARREGAR REGISTROS
 async function loadRecords(){
   const snapshot = await db.collection("registros").orderBy("date","desc").get();
   historyTableBody.innerHTML = "";
+  const records = [];
   snapshot.forEach(doc=>{
     const r = doc.data();
+    records.push(r);
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${r.date}</td><td>${r.driver}</td><td>${r.timeStart}</td><td>${r.timeEnd}</td><td>${r.kmStart}</td><td>${r.kmEnd}</td><td>${r.kmTravelled}</td><td>${r.fuel}</td>`;
     historyTableBody.appendChild(tr);
   });
+  updateCharts(records);
 }
-</script>
 
-</body>
-</html>
+// 🔹 EXPORTAÇÃO
+document.getElementById('exportCSV').addEventListener('click', async ()=>{
+  const snapshot = await db.collection("registros").get();
+  let csv = "Data,Condutor,Saída,Chegada,Km Inicial,Km Final,Km Percorrida,Combustível\n";
+  snapshot.forEach(doc=>{
+    const r = doc.data();
+    csv += `${r.date},${r.driver},${r.timeStart},${r.timeEnd},${r.kmStart},${r.kmEnd},${r.kmTravelled},${r.fuel}\n`;
+  });
+  downloadFile(csv,"registros.csv","text/csv");
+});
+document.getElementById('exportTXT').addEventListener('click', async ()=>{
+  const snapshot = await db.collection("registros").get();
+  let txt = "Data | Condutor | Saída | Chegada | Km Inicial | Km Final | Km Percorrida | Combustível\n";
+  snapshot.forEach(doc=>{
+    const r = doc.data();
+    txt += `${r.date} | ${r.driver} | ${r.timeStart} | ${r.timeEnd} | ${r.kmStart} | ${r.kmEnd} | ${r.kmTravelled} | ${r.fuel}\n`;
+  });
+  downloadFile(txt,"registros.txt","text/plain");
+});
+function downloadFile(content,fileName,mimeType){
+  const blob = new Blob([content],{type:mimeType});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = fileName; a.click();
+  URL.revokeObjectURL(url);
+}
 
+// 🔹 GRÁFICOS
+function updateCharts(records){
+  const condutores = [...new Set(records.map(r=>r.driver))];
+  const colors = condutores.map((_,i)=>`hsl(${i*60%360},70%,50%)`);
+  const kmData = condutores.map(d=>records.filter(r=>r.driver===d).reduce((a
