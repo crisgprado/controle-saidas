@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Controle de Saídas - Firebase</title>
+<script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+<header class="bg-blue-600 text-white p-4 text-center font-bold text-xl">🚗 Controle de Saídas</header>
+
+<div id="loginPage" class="flex-1 flex items-center justify-center">
+  <div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-md">
+    <h2 class="text-2xl font-bold mb-4 text-center">Login</h2>
+    <input id="username" placeholder="Usuário" class="w-full p-2 border rounded mb-2">
+    <input id="password" placeholder="Senha" type="password" class="w-full p-2 border rounded mb-4">
+    <button id="loginBtn" class="w-full bg-blue-600 text-white p-3 rounded hover:bg-blue-700">Entrar</button>
+  </div>
+</div>
+
+<div id="mainPage" class="hidden flex-1 flex flex-col p-4">
+  <h2 class="text-xl font-bold mb-2">Registrar Saída</h2>
+  <form id="carForm" class="bg-white p-4 rounded-xl shadow space-y-2">
+    <input type="date" id="date" class="w-full p-2 border rounded" required>
+    <select id="driver" class="w-full p-2 border rounded" required>
+      <option value="">-- Selecione Condutor --</option>
+      <option value="Cristiano">Cristiano</option>
+      <option value="Gabriel">Gabriel</option>
+      <option value="Roberto">Roberto</option>
+    </select>
+    <input type="time" id="timeStart" class="w-full p-2 border rounded" required>
+    <input type="time" id="timeEnd" class="w-full p-2 border rounded" required>
+    <input type="number" id="kmStart" placeholder="Km Inicial" class="w-full p-2 border rounded" required>
+    <input type="number" id="kmEnd" placeholder="Km Final" class="w-full p-2 border rounded" required>
+    <input type="number" id="fuel" placeholder="Litros Abastecidos (opcional)" class="w-full p-2 border rounded">
+    <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded hover:bg-blue-700">Registrar</button>
+  </form>
+
+  <h2 class="text-xl font-bold mt-4 mb-2">Histórico</h2>
+  <div class="overflow-x-auto bg-white p-2 rounded-xl shadow">
+    <table class="w-full text-center border border-gray-300" id="historyTable">
+      <thead class="bg-blue-600 text-white">
+        <tr>
+          <th>Data</th><th>Condutor</th><th>Saída</th><th>Chegada</th><th>Km Inicial</th><th>Km Final</th><th>Km Percorrida</th><th>Combustível</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// Firebase config
+const firebaseConfig = {
+    apiKey: "AIzaSyDV7CNAxkfowHWltr-E3BHimLSMb_LaAbI",
+    authDomain: "controle-saidas-3ccd7.firebaseapp.com",
+    projectId: "controle-saidas-3ccd7",
+    storageBucket: "controle-saidas-3ccd7.firebasestorage.app",
+    messagingSenderId: "1047924790652",
+    appId: "1:1047924790652:web:104a482faf08879cf540f9"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const loginPage = document.getElementById('loginPage');
+const mainPage = document.getElementById('mainPage');
+const historyTableBody = document.querySelector("#historyTable tbody");
+
+// Usuários fixos para teste
+const users = { 'Cristiano':'1234','Gabriel':'1234','Roberto':'1234','admin':'admin123' };
+
+document.getElementById('loginBtn').addEventListener('click', ()=>{
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  if(users[username] && users[username]===password){
+    loginPage.classList.add('hidden');
+    mainPage.classList.remove('hidden');
+    loadRecords();
+  } else alert("Usuário ou senha incorretos!");
+});
+
+document.getElementById('carForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const date = document.getElementById('date').value;
+  const driver = document.getElementById('driver').value;
+  const timeStart = document.getElementById('timeStart').value;
+  const timeEnd = document.getElementById('timeEnd').value;
+  const kmStart = parseFloat(document.getElementById('kmStart').value);
+  const kmEnd = parseFloat(document.getElementById('kmEnd').value);
+  const fuel = parseFloat(document.getElementById('fuel').value||0);
+  const kmTravelled = kmEnd - kmStart;
+
+  await db.collection("registros").add({date,driver,timeStart,timeEnd,kmStart,kmEnd,kmTravelled,fuel});
+  e.target.reset();
+  loadRecords();
+});
+
+async function loadRecords(){
+  const snapshot = await db.collection("registros").orderBy("date","desc").get();
+  historyTableBody.innerHTML = "";
+  snapshot.forEach(doc=>{
+    const r = doc.data();
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.date}</td><td>${r.driver}</td><td>${r.timeStart}</td><td>${r.timeEnd}</td><td>${r.kmStart}</td><td>${r.kmEnd}</td><td>${r.kmTravelled}</td><td>${r.fuel}</td>`;
+    historyTableBody.appendChild(tr);
+  });
+}
+</script>
+
+</body>
+</html>
