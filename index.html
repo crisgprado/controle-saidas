@@ -172,4 +172,29 @@ function downloadFile(content,fileName,mimeType){
 function updateCharts(records){
   const condutores = [...new Set(records.map(r=>r.driver))];
   const colors = condutores.map((_,i)=>`hsl(${i*60%360},70%,50%)`);
-  const kmData = condutores.map(d=>records.filter(r=>r.driver===d).reduce((a
+  const kmData = condutores.map(d=>records.filter(r=>r.driver===d).reduce((a,b)=>a+b.kmTravelled,0));
+  const consumoData = condutores.map(d=>{
+    const rec = records.filter(r=>r.driver===d && r.fuel>0);
+    const totalKm = rec.reduce((a,b)=>a+b.kmTravelled,0);
+    const totalFuel = rec.reduce((a,b)=>a+b.fuel,0);
+    return totalFuel>0?(totalKm/totalFuel).toFixed(2):0;
+  });
+
+  if(kmChart) kmChart.destroy();
+  if(consumoChart) consumoChart.destroy();
+
+  kmChart = new Chart(document.getElementById('kmChart'),{
+    type:'bar',
+    data:{labels:condutores,datasets:[{label:'Km Percorridos',data:kmData,backgroundColor:colors}]},
+    options:{responsive:true,plugins:{legend:{display:false}}}
+  });
+  consumoChart = new Chart(document.getElementById('consumoChart'),{
+    type:'bar',
+    data:{labels:condutores,datasets:[{label:'Km/L',data:consumoData,backgroundColor:colors}]},
+    options:{responsive:true,plugins:{legend:{display:false}}}
+  });
+}
+</script>
+
+</body>
+</html>
